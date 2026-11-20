@@ -31,7 +31,6 @@ class WebViewPage extends StatefulWidget {
 
 class _WebViewPageState extends State<WebViewPage> {
   late final WebViewController _controller;
-  int _retryCount = 0;
 
   @override
   void initState() {
@@ -42,16 +41,13 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
           _controller.runJavaScript("""
-            // 1. 注入基础样式
+            // 1. 基础样式黑化
             var style = document.createElement('style');
             style.innerHTML = 'html,body{background:#000 !important;overflow-x:hidden !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
             document.head.appendChild(style);
 
-            // 2. 清理函数
+            // 2. 只执行一次的清理（去掉循环，防止卡死）
             function cleanPage() {
-              document.documentElement.style.setProperty('background', '#000', 'important');
-              document.body.style.setProperty('background', '#000', 'important');
-              
               // 去除左边缝隙
               document.body.style.setProperty('margin-left', '-15px', 'important');
               document.body.style.setProperty('width', 'calc(100vw + 15px)', 'important');
@@ -66,7 +62,7 @@ class _WebViewPageState extends State<WebViewPage> {
                 }
               }
 
-              // 干掉“暂停 空格”提示框
+              // 干掉提示框
               var allElements = document.querySelectorAll('*');
               for (var j = 0; j < allElements.length; j++) {
                 var e = allElements[j];
@@ -74,16 +70,16 @@ class _WebViewPageState extends State<WebViewPage> {
                   var txt = e.childNodes[0].nodeValue;
                   if (txt && (txt.indexOf('空格') > -1 || txt.indexOf('暂停') > -1 || txt.indexOf('播放') > -1)) {
                     e.style.setProperty('display', 'none', 'important');
-                    if(e.parentElement) e.parentElement.style.setProperty('display', 'none', 'important');
                   }
                 }
               }
             }
 
-            setTimeout(cleanPage, 500);
-            setTimeout(cleanPage, 1500);
+            // 延迟执行两次，确保页面完全渲染
+            setTimeout(cleanPage, 1000);
+            setTimeout(cleanPage, 2500);
 
-            // 3. 核心：加入强制手势滑动引擎 (模拟鼠标滚轮)
+            // 3. 强制滑动手势
             var startY = 0;
             var isScrolling = false;
 
@@ -109,7 +105,6 @@ class _WebViewPageState extends State<WebViewPage> {
                     var centerY = window.innerHeight / 2;
                     var target = document.elementFromPoint(centerX, centerY) || document.body;
                     
-                    // 模拟滚轮事件
                     var wheelEvent = new WheelEvent('wheel', {
                         deltaY: direction * 1000,
                         bubbles: true,
@@ -122,19 +117,10 @@ class _WebViewPageState extends State<WebViewPage> {
 
                     setTimeout(function() { 
                         isScrolling = false; 
-                        cleanPage(); // 滑动后顺便清理一下可能新弹出的提示
                     }, 600);
                 }
             }, {passive: false});
           """);
-        },
-        onWebResourceError: (WebResourceError error) {
-          if (_retryCount < 3) {
-            _retryCount++;
-            Future.delayed(const Duration(seconds: 2), () {
-              _controller.reload();
-            });
-          }
         },
       ))
       ..loadRequest(Uri.parse('https://www.kuaishou.com/new-reco'));
