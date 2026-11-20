@@ -41,49 +41,21 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
           _controller.runJavaScript("""
-            setInterval(function() {
-              // 1. 强制锁定网页视口，禁止网页缩放自己
-              var meta = document.querySelector('meta[name="viewport"]');
-              if (!meta) {
-                meta = document.createElement('meta');
-                meta.name = 'viewport';
-                document.head.appendChild(meta);
-              }
-              meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+            // 1. 注入基础样式
+            var style = document.createElement('style');
+            style.innerHTML = 'body{background:#000 !important;overflow-x:hidden !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
+            document.head.appendChild(style);
 
-              // 2. 隐藏左侧边栏和顶部导航
-              var divs = document.querySelectorAll('div, aside, nav, header');
+            // 2. 动态找寻并干掉左侧边栏（但不碰视频和底部按钮）
+            setInterval(function() {
+              var divs = document.querySelectorAll('div');
               for (var i = 0; i < divs.length; i++) {
                 var el = divs[i];
                 var rect = el.getBoundingClientRect();
-                if (rect.width > 80 && rect.width < 350 && rect.height > window.innerHeight * 0.6 && rect.left < 50) {
+                // 只要靠左且又高又窄，立刻隐藏
+                if (rect.left <= 5 && rect.width > 80 && rect.width < 350 && rect.height > window.innerHeight * 0.6) {
                   el.style.setProperty('display', 'none', 'important');
                 }
-                if (rect.height > 0 && rect.height < 80 && rect.width > window.innerWidth * 0.8) {
-                   el.style.setProperty('display', 'none', 'important');
-                }
-              }
-
-              // 3. 核心：把视频所在的父容器强制变成全屏固定层
-              var v = document.querySelector('video');
-              if (v) {
-                // 向上找两层父节点，直接铺满屏幕
-                var p = v.parentElement ? v.parentElement.parentElement : null;
-                if (p) {
-                  p.style.setProperty('position', 'fixed', 'important');
-                  p.style.setProperty('top', '0', 'important');
-                  p.style.setProperty('left', '0', 'important');
-                  p.style.setProperty('width', '100vw', 'important');
-                  p.style.setProperty('height', '100vh', 'important');
-                  p.style.setProperty('z-index', '9999', 'important');
-                  p.style.setProperty('margin', '0', 'important');
-                  p.style.setProperty('padding', '0', 'important');
-                  p.style.setProperty('background', '#000', 'important');
-                }
-                // 视频本身铺满
-                v.style.setProperty('width', '100%', 'important');
-                v.style.setProperty('height', '100%', 'important');
-                v.style.setProperty('object-fit', 'contain', 'important'); // 用 contain 防止画面被切掉
               }
             }, 1000);
           """);
