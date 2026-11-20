@@ -41,16 +41,10 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
-          // 使用单行安全的字符串拼接，彻底避开编译器多行解析 Bug
-          String js = "";
-          // 1. 黑化、去边、铺满
-          js += "var s=document.createElement('style');s.innerHTML='html,body{background:#000!important;overflow-x:hidden!important;margin:0!important;padding:0!important;}aside,.sidebar,header,.header{display:none!important;}video{width:100vw!important;height:100vh!important;object-fit:cover!important;}';document.head.appendChild(s);";
-          // 2. 延迟 2.5 秒自动按 H 键全屏
-          js += "setTimeout(function(){var e=new KeyboardEvent('keydown',{key:'h',code:'KeyH',keyCode:72,which:72,bubbles:true});document.dispatchEvent(e);},2500);";
-          // 3. 强制滑动引擎
-          js += "var sy=0;document.addEventListener('touchstart',function(e){sy=e.touches[0].clientY;},false);document.addEventListener('touchend',function(e){var ey=e.changedTouches[0].clientY;var d=sy-ey;if(Math.abs(d)>40){var dir=d>0?1:-1;var w=new WheelEvent('wheel',{deltaY:dir*1000,bubbles:true});document.body.dispatchEvent(w);}},false);";
+          // 极其精简的一行 JS，只做两件事：隐藏左侧栏 + 延迟按 H 键
+          String safeJs = "var s=document.createElement('style');s.innerHTML='aside,.sidebar,header,.header{display:none!important}';document.head.appendChild(s);setTimeout(function(){var e=new KeyboardEvent('keydown',{key:'h',keyCode:72,bubbles:true});document.dispatchEvent(e);},2500);";
           
-          _controller.runJavaScript(js);
+          _controller.runJavaScript(safeJs);
         },
       ))
       ..loadRequest(Uri.parse('https://www.kuaishou.com/new-reco'));
