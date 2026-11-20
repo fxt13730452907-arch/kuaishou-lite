@@ -37,6 +37,8 @@ class _WebViewPageState extends State<WebViewPage> {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      // 关键：允许自动播放
+      ..setMediaPlaybackRequiresUserGesture(false)
       ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
@@ -46,7 +48,7 @@ class _WebViewPageState extends State<WebViewPage> {
             style.innerHTML = 'html,body{background:#000 !important; overflow-x:hidden !important; margin:0 !important; padding:0 !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
             document.head.appendChild(style);
 
-            // 2. 清理与强制居中铺满
+            // 2. 清理、铺满与发声
             function cleanPage() {
               document.body.style.setProperty('margin-left', '0', 'important');
               document.body.style.setProperty('width', '100vw', 'important');
@@ -61,19 +63,20 @@ class _WebViewPageState extends State<WebViewPage> {
                 }
               }
 
-              // 干掉提示框
+              // 干掉各种提示框（包括静音提示、空格提示）
               var allElements = document.querySelectorAll('*');
               for (var j = 0; j < allElements.length; j++) {
                 var e = allElements[j];
                 if (e.childNodes.length > 0 && e.childNodes[0].nodeType === 3) {
                   var txt = e.childNodes[0].nodeValue;
-                  if (txt && (txt.indexOf('空格') > -1 || txt.indexOf('暂停') > -1 || txt.indexOf('播放') > -1)) {
+                  if (txt && (txt.indexOf('空格') > -1 || txt.indexOf('暂停') > -1 || txt.indexOf('静音') > -1 || txt.indexOf('打开声音') > -1)) {
                     e.style.setProperty('display', 'none', 'important');
+                    if(e.parentElement) e.parentElement.style.setProperty('display', 'none', 'important');
                   }
                 }
               }
 
-              // 3. 核心：强行居中铺满
+              // 核心：强行铺满并强制解除静音
               var v = document.querySelector('video');
               if (v) {
                 var p = v;
@@ -84,39 +87,30 @@ class _WebViewPageState extends State<WebViewPage> {
                     p.style.setProperty('margin', '0 auto', 'important');
                     p.style.setProperty('padding', '0', 'important');
                     p.style.setProperty('left', '0', 'important');
-                    p.style.setProperty('transform', 'none', 'important');
                     p = p.parentElement;
                   }
                 }
                 v.style.setProperty('width', '100vw', 'important');
                 v.style.setProperty('height', '100vh', 'important');
                 v.style.setProperty('object-fit', 'cover', 'important');
+                
+                // 强制发声
+                v.muted = false;
+                v.play().catch(function(e){});
               }
             }
             
             setTimeout(cleanPage, 1000);
             setTimeout(cleanPage, 2500);
+            setInterval(cleanPage, 3000); // 持续监控，防止弹窗死灰复燃
 
-            // 4. 核心新增：安全延迟后，自动帮你点一次“全屏”按钮
-            window._hasAutoClicked = false;
-            function clickFullscreen() {
-              if (window._hasAutoClicked) return;
-              // 找带有 title="全屏" 或者相关的元素
-              var els = document.querySelectorAll('div, button, span, svg, path');
-              for (var i = 0; i < els.length; i++) {
-                var el = els[i];
-                var title = el.getAttribute('title') || el.getAttribute('aria-label') || '';
-                if (title.indexOf('全屏') > -1 || title.indexOf('fullscreen') > -1) {
-                  el.click();
-                  window._hasAutoClicked = true;
-                  return;
-                }
-              }
-            }
-            // 等 2.5 秒（网页和视频都加载完）再点，防止黑屏
-            setTimeout(clickFullscreen, 2500);
+            // 3. 极致全屏尝试（如果找不到按钮，就模拟键盘 F 键）
+            setTimeout(function() {
+              var ev = new KeyboardEvent('keydown', { key: 'f', code: 'KeyF', keyCode: 70, which: 70, bubbles: true });
+              document.dispatchEvent(ev);
+            }, 3500);
 
-            // 5. 滑动引擎
+            // 4. 滑动引擎
             var startY = 0;
             document.addEventListener('touchstart', function(e) {
                 startY = e.touches[0].clientY;
