@@ -37,13 +37,13 @@ class _WebViewPageState extends State<WebViewPage> {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      // 关键：允许自动播放
+      // 允许媒体自动播放
       ..setMediaPlaybackRequiresUserGesture(false)
       ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
           _controller.runJavaScript("""
-            // 1. 基础样式
+            // 1. 基础样式清理
             var style = document.createElement('style');
             style.innerHTML = 'html,body{background:#000 !important; overflow-x:hidden !important; margin:0 !important; padding:0 !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
             document.head.appendChild(style);
@@ -63,7 +63,7 @@ class _WebViewPageState extends State<WebViewPage> {
                 }
               }
 
-              // 干掉各种提示框（包括静音提示、空格提示）
+              // 干掉各种提示框（静音提示、空格提示等）
               var allElements = document.querySelectorAll('*');
               for (var j = 0; j < allElements.length; j++) {
                 var e = allElements[j];
@@ -76,7 +76,7 @@ class _WebViewPageState extends State<WebViewPage> {
                 }
               }
 
-              // 核心：强行铺满并强制解除静音
+              // 强行铺满并强制发声
               var v = document.querySelector('video');
               if (v) {
                 var p = v;
@@ -94,7 +94,7 @@ class _WebViewPageState extends State<WebViewPage> {
                 v.style.setProperty('height', '100vh', 'important');
                 v.style.setProperty('object-fit', 'cover', 'important');
                 
-                // 强制发声
+                // 强制取消静音
                 v.muted = false;
                 v.play().catch(function(e){});
               }
@@ -104,10 +104,18 @@ class _WebViewPageState extends State<WebViewPage> {
             setTimeout(cleanPage, 2500);
             setInterval(cleanPage, 3000); // 持续监控，防止弹窗死灰复燃
 
-            // 3. 极致全屏尝试（如果找不到按钮，就模拟键盘 F 键）
+            // 3. 核心：延迟模拟按下 'H' 键触发全屏
             setTimeout(function() {
-              var ev = new KeyboardEvent('keydown', { key: 'f', code: 'KeyF', keyCode: 70, which: 70, bubbles: true });
-              document.dispatchEvent(ev);
+              var hEvent = new KeyboardEvent('keydown', { 
+                  key: 'h', 
+                  code: 'KeyH', 
+                  keyCode: 72, 
+                  which: 72, 
+                  bubbles: true,
+                  cancelable: true
+              });
+              document.dispatchEvent(hEvent);
+              document.body.dispatchEvent(hEvent);
             }, 3500);
 
             // 4. 滑动引擎
