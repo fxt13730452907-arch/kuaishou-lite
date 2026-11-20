@@ -41,13 +41,17 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
           _controller.runJavaScript("""
-            // 1. 隐藏多余元素并黑化背景
+            // 1. 基础样式
             var style = document.createElement('style');
-            style.innerHTML = 'html,body{background:#000 !important; overflow-x:hidden !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
+            style.innerHTML = 'html,body{background:#000 !important; overflow-x:hidden !important; margin:0 !important; padding:0 !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
             document.head.appendChild(style);
 
-            // 2. 清理页面
+            // 2. 清理与强制居中铺满
             function cleanPage() {
+              // 取消之前的暴力向左偏移！
+              document.body.style.setProperty('margin-left', '0', 'important');
+              document.body.style.setProperty('width', '100vw', 'important');
+
               // 干掉左侧边栏
               var divs = document.querySelectorAll('div');
               for (var i = 0; i < divs.length; i++) {
@@ -70,24 +74,29 @@ class _WebViewPageState extends State<WebViewPage> {
                 }
               }
 
-              // 3. 核心：强制视频铺满放大
+              // 3. 核心：强行居中铺满
               var v = document.querySelector('video');
               if (v) {
-                // 强制视频容器铺满屏幕
+                // 向上找 4 层父级，全部强行拉满、居中
+                var p = v;
+                for (var k = 0; k < 4; k++) {
+                  if (p) {
+                    p.style.setProperty('width', '100vw', 'important');
+                    p.style.setProperty('max-width', '100vw', 'important');
+                    p.style.setProperty('margin', '0 auto', 'important');
+                    p.style.setProperty('padding', '0', 'important');
+                    p.style.setProperty('left', '0', 'important');
+                    p.style.setProperty('transform', 'none', 'important'); // 防止它自己乱偏移
+                    p = p.parentElement;
+                  }
+                }
+                // 视频本身铺满，使用 cover 裁剪
                 v.style.setProperty('width', '100vw', 'important');
                 v.style.setProperty('height', '100vh', 'important');
-                // 自动缩放裁剪，不留黑边
-                v.style.setProperty('object-fit', 'cover', 'important'); 
-                
-                // 如果视频父容器有宽度限制，一并解除
-                if (v.parentElement) {
-                    v.parentElement.style.setProperty('width', '100vw', 'important');
-                    v.parentElement.style.setProperty('max-width', '100vw', 'important');
-                }
+                v.style.setProperty('object-fit', 'cover', 'important');
               }
             }
             
-            // 延迟执行，确保视频已经加载
             setTimeout(cleanPage, 1000);
             setTimeout(cleanPage, 2500);
 
