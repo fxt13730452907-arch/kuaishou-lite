@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 引入沉浸式状态栏必须的包
 import 'package:webview_flutter/webview_flutter.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  // 开启沉浸式状态栏（透明背景 + 白色图标）
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+  ));
   runApp(const MyApp());
 }
 
@@ -34,34 +41,39 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
-          // 单行拼接，绝对不会编译失败
+          // 使用绝对安全的单行拼接，防止编译器崩溃
           String js = "";
           
-          // 1. 全局黑化，隐藏左侧导航和顶部
-          js += "var s=document.createElement('style');s.innerHTML='html,body{background:#000!important;overflow-x:hidden!important;margin:0!important;padding:0!important;}aside,.sidebar,header,.header{display:none!important;}::-webkit-scrollbar{display:none!important;}';document.head.appendChild(s);";
+          // 1. 基础黑化，干掉左侧导航和顶部
+          js += "var s=document.createElement('style');s.innerHTML='html,body{background:#000!important;overflow-x:hidden!important;margin:0!important;padding:0!important;}aside,.sidebar,header,.header,[class*=header],[class*=nav]{display:none!important;}';document.head.appendChild(s);";
           
-          // 2. 清理与恢复居中
+          // 2. 清理、隐藏全屏按钮、防暂停、强制发声
           js += "function ff(){";
-          // 恢复网页正常居中
+          // 强行贴边
           js += "document.body.style.setProperty('margin-left','0','important');document.body.style.setProperty('width','100vw','important');";
           
-          // 干掉左侧占位长条
+          // 干掉左侧长条和恶心的静音提示框
           js += "var divs=document.querySelectorAll('div');for(var i=0;i<divs.length;i++){var el=divs[i];var r=el.getBoundingClientRect();if(r.left<=5&&r.width>80&&r.width<350&&r.height>window.innerHeight*0.6){el.style.setProperty('display','none','important');}}";
-          
-          // 干掉烦人的静音提示框
           js += "var all=document.querySelectorAll('*');for(var j=0;j<all.length;j++){var n=all[j];if(n.childNodes.length>0&&n.childNodes[0].nodeType===3){var t=n.childNodes[0].nodeValue;if(t&&(t.indexOf('打开声音')>-1||t.indexOf('静音')>-1)){n.style.setProperty('display','none','important');if(n.parentElement)n.parentElement.style.setProperty('display','none','important');}}}";
           
-          // 3. 恢复视频居中和正常比例（不再强制裁切铺满）
-          js += "var v=document.querySelector('video');if(v){";
-          js += "v.style.setProperty('width','100vw','important');v.style.setProperty('height','100vh','important');v.style.setProperty('object-fit','contain','important');"; // 改为 contain
-          js += "var p=v.parentElement;for(var k=0;k<5;k++){if(p){p.style.setProperty('width','100%','important');p.style.setProperty('margin','0 auto','important');p.style.setProperty('left','0','important');p=p.parentElement;}}";
+          // 【新增】隐藏全屏按钮（解决点击黑屏 Bug），找带“全屏”或 fullscreen 字眼的按钮并隐藏
+          js += "var btns=document.querySelectorAll('div,span,button,svg');for(var b=0;b<btns.length;b++){var el=btns[b];var title=el.getAttribute('title')||el.getAttribute('aria-label')||'';if(title.indexOf('全屏')>-1||title.indexOf('fullscreen')>-1){el.style.setProperty('display','none','important');}}";
+          
+          // 核心：暴力把视频及其父级拉宽贴边
+          js += "var v=document.querySelector('video');if(v){var p=v.parentElement;for(var k=0;k<5;k++){if(p){p.style.setProperty('width','100vw','important');p.style.setProperty('max-width','100vw','important');p.style.setProperty('margin','0','important');p.style.setProperty('padding','0','important');p.style.setProperty('left','0','important');p.style.setProperty('transform','none','important');p=p.parentElement;}}";
+          js += "v.style.setProperty('width','100vw','important');v.style.setProperty('height','100vh','important');v.style.setProperty('object-fit','cover','important');";
+          
+          // 【新增】阻止解除静音时自动暂停：监听暂停事件并强制恢复播放
+          js += "v.onpause=function(){if(v.currentTime<v.duration){setTimeout(function(){v.play().catch(function(e){});},50);}};";
+          
+          // 尝试解除静音
           js += "v.muted=false;v.play().catch(function(e){});}";
           js += "}";
           
-          // 4. 延迟执行，确保加载完
+          // 3. 延迟执行，确保视频加载
           js += "setTimeout(ff,1000);setTimeout(ff,2500);";
           
-          // 5. 滑动引擎
+          // 4. 滑动引擎
           js += "var sy=0;document.addEventListener('touchstart',function(e){sy=e.touches[0].clientY;},false);document.addEventListener('touchend',function(e){var ey=e.changedTouches[0].clientY;var d=sy-ey;if(Math.abs(d)>40){var dir=d>0?1:-1;var w=new WheelEvent('wheel',{deltaY:dir*1000,bubbles:true});document.body.dispatchEvent(w);setTimeout(ff,1000);}},false);";
           
           _controller.runJavaScript(js);
