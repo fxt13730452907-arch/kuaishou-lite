@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+// 导入手势识别器工厂
+import 'package:flutter/gestures.dart'; 
 import 'package:webview_flutter/webview_flutter.dart';
 
 void main() {
@@ -40,19 +42,17 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
+          // JS 脚本保持不变，用于界面黑化和模拟滚轮滑动
           _controller.runJavaScript("""
             // 1. 基础样式黑化
             var style = document.createElement('style');
             style.innerHTML = 'html,body{background:#000 !important;overflow-x:hidden !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
             document.head.appendChild(style);
 
-            // 2. 只执行一次的清理（去掉循环，防止卡死）
+            // 2. 清理页面
             function cleanPage() {
-              // 去除左边缝隙
               document.body.style.setProperty('margin-left', '-15px', 'important');
               document.body.style.setProperty('width', 'calc(100vw + 15px)', 'important');
-
-              // 干掉左侧边栏
               var divs = document.querySelectorAll('div');
               for (var i = 0; i < divs.length; i++) {
                 var el = divs[i];
@@ -61,8 +61,6 @@ class _WebViewPageState extends State<WebViewPage> {
                   el.style.setProperty('display', 'none', 'important');
                 }
               }
-
-              // 干掉提示框
               var allElements = document.querySelectorAll('*');
               for (var j = 0; j < allElements.length; j++) {
                 var e = allElements[j];
@@ -74,37 +72,29 @@ class _WebViewPageState extends State<WebViewPage> {
                 }
               }
             }
-
-            // 延迟执行两次，确保页面完全渲染
             setTimeout(cleanPage, 1000);
             setTimeout(cleanPage, 2500);
 
-            // 3. 强制滑动手势
+            // 3. 强制滑动手势 (JS模拟滚轮，作为 gestureRecognizers 的补充)
             var startY = 0;
             var isScrolling = false;
-
             document.addEventListener('touchstart', function(e) {
                 startY = e.touches[0].clientY;
             }, {passive: false});
-
             document.addEventListener('touchmove', function(e) {
                 if (Math.abs(e.touches[0].clientY - startY) > 10) {
                     e.preventDefault(); 
                 }
             }, {passive: false});
-
             document.addEventListener('touchend', function(e) {
                 var endY = e.changedTouches[0].clientY;
                 var distance = startY - endY;
-                
                 if (Math.abs(distance) > 40 && !isScrolling) {
                     isScrolling = true;
                     var direction = distance > 0 ? 1 : -1;
-                    
                     var centerX = window.innerWidth / 2;
                     var centerY = window.innerHeight / 2;
                     var target = document.elementFromPoint(centerX, centerY) || document.body;
-                    
                     var wheelEvent = new WheelEvent('wheel', {
                         deltaY: direction * 1000,
                         bubbles: true,
@@ -114,7 +104,6 @@ class _WebViewPageState extends State<WebViewPage> {
                     });
                     target.dispatchEvent(wheelEvent);
                     window.scrollBy({ top: direction * window.innerHeight * 0.85, behavior: 'smooth' });
-
                     setTimeout(function() { 
                         isScrolling = false; 
                     }, 600);
@@ -130,7 +119,13 @@ class _WebViewPageState extends State<WebViewPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: WebViewWidget(controller: _controller),
+      body: WebViewWidget(
+        controller: _controller,
+        // 👇 核心修改：声明WebView优先处理垂直拖动，解决滑动失效问题
+        gestureRecognizers: {
+          Factory<VerticalDragGestureRecognizer>(() => VerticalDragGestureRecognizer()),
+        },
+      ),
     );
   }
 }
