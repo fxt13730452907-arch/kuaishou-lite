@@ -17,7 +17,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.35.1'
+          flutter-version: '3.24.0'
           cache: true
           
       - name: Generate Android Scaffolding
@@ -25,29 +25,20 @@ jobs:
         
       - name: Inject Permission and Fix SDK
         run: |
-          # 注入网络权限
           sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET" />\n    <application|' android/app/src/main/AndroidManifest.xml
           
-          # 加大内存
-          echo "org.gradle.jvmargs=-Xmx4096m" >> android/gradle.properties
-          
-          # 锁定 SDK
-          if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle.kts
-            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' android/app/build.gradle.kts
-            sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/' android/app/build.gradle.kts
-          fi
           if [ -f android/app/build.gradle ]; then
-            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/' android/app/build.gradle
-            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/' android/app/build.gradle
-            sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 35/' android/app/build.gradle
+            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/' android/app/build.gradle
+            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/' android/app/build.gradle
+          fi
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/' android/app/build.gradle.kts
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/' android/app/build.gradle.kts
           fi
 
       - run: flutter clean
       - run: flutter pub get
-      
-      # 加上 -P 参数再次兜底 SDK
-      - run: flutter build apk --release --split-per-abi -Pflutter.minSdkVersion=24
+      - run: flutter build apk --release --split-per-abi
       
       - uses: actions/upload-artifact@v4
         with:
