@@ -41,28 +41,46 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
           _controller.runJavaScript("""
-            // 1. 基础样式
+            // 1. 暴力注入全局 CSS
             var style = document.createElement('style');
-            style.innerHTML = 'html,body{background:#000 !important; overflow-x:hidden !important; margin:0 !important; padding:0 !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
+            style.innerHTML = 'html, body { background: #000 !important; overflow-x: hidden !important; margin: 0 !important; padding: 0 !important; } * { max-width: 100vw !important; }';
             document.head.appendChild(style);
 
-            // 2. 清理与强制居中铺满
             function cleanPage() {
-              // 取消之前的暴力向左偏移！
-              document.body.style.setProperty('margin-left', '0', 'important');
-              document.body.style.setProperty('width', '100vw', 'important');
-
-              // 干掉左侧边栏
-              var divs = document.querySelectorAll('div');
+              // 2. 暴力干掉所有左侧的侧边栏容器
+              var divs = document.querySelectorAll('div, aside, nav, header');
               for (var i = 0; i < divs.length; i++) {
                 var el = divs[i];
                 var rect = el.getBoundingClientRect();
-                if (rect.left <= 5 && rect.width > 80 && rect.width < 350 && rect.height > window.innerHeight * 0.6) {
+                // 只要它靠左 (left<50)，且占了一定宽度(>50)，且比较高(>屏幕50%)，直接干掉
+                if (rect.left < 50 && rect.width > 50 && rect.height > window.innerHeight * 0.5) {
                   el.style.setProperty('display', 'none', 'important');
                 }
               }
 
-              // 干掉提示框
+              // 3. 暴力释放中心播放器容器
+              var v = document.querySelector('video');
+              if (v) {
+                var p = v;
+                // 向上找 7 层父级，彻底清除边距，全部拉满 100vw
+                for (var k = 0; k < 7; k++) {
+                  if (p) {
+                    p.style.setProperty('width', '100vw', 'important');
+                    p.style.setProperty('max-width', '100vw', 'important');
+                    p.style.setProperty('margin', '0', 'important');
+                    p.style.setProperty('padding', '0', 'important');
+                    p.style.setProperty('left', '0', 'important');
+                    p.style.setProperty('position', 'relative', 'important');
+                    p = p.parentElement;
+                  }
+                }
+                // 视频本身强行裁剪铺满
+                v.style.setProperty('width', '100vw', 'important');
+                v.style.setProperty('height', '100vh', 'important');
+                v.style.setProperty('object-fit', 'cover', 'important');
+              }
+              
+              // 4. 干掉中间的快捷键提示
               var allElements = document.querySelectorAll('*');
               for (var j = 0; j < allElements.length; j++) {
                 var e = allElements[j];
@@ -73,39 +91,15 @@ class _WebViewPageState extends State<WebViewPage> {
                   }
                 }
               }
-
-              // 3. 核心：强行居中铺满
-              var v = document.querySelector('video');
-              if (v) {
-                // 向上找 4 层父级，全部强行拉满、居中
-                var p = v;
-                for (var k = 0; k < 4; k++) {
-                  if (p) {
-                    p.style.setProperty('width', '100vw', 'important');
-                    p.style.setProperty('max-width', '100vw', 'important');
-                    p.style.setProperty('margin', '0 auto', 'important');
-                    p.style.setProperty('padding', '0', 'important');
-                    p.style.setProperty('left', '0', 'important');
-                    p.style.setProperty('transform', 'none', 'important'); // 防止它自己乱偏移
-                    p = p.parentElement;
-                  }
-                }
-                // 视频本身铺满，使用 cover 裁剪
-                v.style.setProperty('width', '100vw', 'important');
-                v.style.setProperty('height', '100vh', 'important');
-                v.style.setProperty('object-fit', 'cover', 'important');
-              }
             }
             
             setTimeout(cleanPage, 1000);
             setTimeout(cleanPage, 2500);
+            setTimeout(cleanPage, 4000);
 
-            // 4. 滑动引擎
+            // 5. 滑动引擎
             var startY = 0;
-            document.addEventListener('touchstart', function(e) {
-                startY = e.touches[0].clientY;
-            }, {passive: true});
-
+            document.addEventListener('touchstart', function(e) { startY = e.touches[0].clientY; }, {passive: true});
             document.addEventListener('touchend', function(e) {
                 var endY = e.changedTouches[0].clientY;
                 var distance = startY - endY;
@@ -114,9 +108,7 @@ class _WebViewPageState extends State<WebViewPage> {
                     var centerX = window.innerWidth / 2;
                     var centerY = window.innerHeight / 2;
                     var target = document.elementFromPoint(centerX, centerY) || document.body;
-                    var wheelEvent = new WheelEvent('wheel', {
-                        deltaY: direction * 1000, bubbles: true, cancelable: true, clientX: centerX, clientY: centerY
-                    });
+                    var wheelEvent = new WheelEvent('wheel', { deltaY: direction * 1000, bubbles: true, cancelable: true, clientX: centerX, clientY: centerY });
                     target.dispatchEvent(wheelEvent);
                 }
             }, {passive: true});
