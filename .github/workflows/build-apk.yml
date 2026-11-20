@@ -17,37 +17,27 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.22.2'
+          flutter-version: '3.35.1'
           cache: true
           
-      - name: Generate Android Project
-        run: flutter create . --project-name kuaishou_lite --platforms=android --org com.example
+      - name: Generate Android Scaffolding
+        run: flutter create . --project-name kuaishou_lite --platforms=android
         
-      - name: Add Network Permission
+      - name: Inject Permission and Fix SDK
         run: |
+          # 自动注入网络权限
           sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET" />\n    <application|' android/app/src/main/AndroidManifest.xml
-
-      # 核心修复：强制指定 compileSdkVersion 和 minSdkVersion
-      - name: Fix Android SDK Versions
-        run: |
-          # 1. 如果存在 Kotlin DSL 格式的 build.gradle.kts
+          
+          # 强制锁定 SDK 为 35（这是 Webview 插件必须的环境）
           if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/' android/app/build.gradle.kts
-            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/' android/app/build.gradle.kts
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle.kts
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' android/app/build.gradle.kts
+            sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/' android/app/build.gradle.kts
           fi
           
-          # 2. 如果存在 Groovy 格式的 build.gradle
-          if [ -f android/app/build.gradle ]; then
-            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/' android/app/build.gradle
-            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/' android/app/build.gradle
-          fi
-
       - run: flutter pub get
-      
-      - name: Clean project
-        run: flutter clean
-        
-      - run: flutter build apk --release --split-per-abi
+      # 加上 -Pflutter.minSdkVersion=24 防止 Flutter 内部乱改
+      - run: flutter build apk --release --split-per-abi -Pflutter.minSdkVersion=24
       
       - uses: actions/upload-artifact@v4
         with:
