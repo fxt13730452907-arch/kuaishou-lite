@@ -4,7 +4,6 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  // 沉浸状态栏（透明 + 白色图标）
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
@@ -38,34 +37,30 @@ class _WebViewPageState extends State<WebViewPage> {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      // 允许自动播放和正常声音
       ..setMediaPlaybackRequiresUserGesture(false)
       ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
-          // 绝对安全的单行字符串拼接，只做向左拉伸，不碰任何全屏和暂停逻辑
+          // 极度安全的单行拼接。只做两件事：清理左侧占位，不改变视频比例！
           String js = "";
           
-          // 1. 基础黑化
-          js += "var s=document.createElement('style');s.innerHTML='html,body{background:#000!important;margin:0!important;padding:0!important;overflow-x:hidden!important;}aside,.sidebar,header,.header{display:none!important;}';document.head.appendChild(s);";
+          // 1. 全局背景黑化，消除滚动条
+          js += "var s=document.createElement('style');s.innerHTML='html,body{background:#000!important;margin:0!important;overflow-x:hidden!important;}header,.header{display:none!important;}';document.head.appendChild(s);";
           
-          // 2. 核心：干掉左侧占位黑条，将视频拉宽贴边
+          // 2. 只干掉左侧占用空间的黑色长条（绝不碰视频宽度）
           js += "function ff(){";
-          js += "document.body.style.setProperty('margin-left','0','important');document.body.style.setProperty('width','100vw','important');";
-          
-          // 精准狙击左侧占位长条（宽80-350，高大于屏幕60%，靠左）
-          js += "var divs=document.querySelectorAll('div');for(var i=0;i<divs.length;i++){var el=divs[i];var r=el.getBoundingClientRect();if(r.left<=5&&r.width>80&&r.width<350&&r.height>window.innerHeight*0.6){el.style.setProperty('display','none','important');}}";
-          
-          // 找到视频，把父级容器拉满 100vw，绝不改变视频比例（不加 cover）
-          js += "var v=document.querySelector('video');if(v){var p=v.parentElement;for(var k=0;k<4;k++){if(p){p.style.setProperty('width','100vw','important');p.style.setProperty('max-width','100vw','important');p.style.setProperty('margin','0 auto','important');p.style.setProperty('padding','0','important');p.style.setProperty('left','0','important');p.style.setProperty('transform','none','important');p=p.parentElement;}}";
-          js += "v.style.setProperty('width','100vw','important');}";
-          js += "}";
+          js += "var divs=document.querySelectorAll('div,aside,nav');";
+          js += "for(var i=0;i<divs.length;i++){";
+          js += "var el=divs[i];var r=el.getBoundingClientRect();";
+          // 精准击杀：只要它在最左边，且宽度在 80-350 之间，高度占据屏幕一大半，直接隐藏
+          js += "if(r.left<=5&&r.width>80&&r.width<350&&r.height>window.innerHeight*0.6){el.style.setProperty('display','none','important');}";
+          js += "}}";
           
           js += "setTimeout(ff,1000);setTimeout(ff,2500);";
           
-          // 3. 滑动引擎（滑动后重新拉宽一次，防止新视频复位）
+          // 3. 滑动引擎（滑动后重新检查一遍左侧边栏）
           js += "var sy=0;document.addEventListener('touchstart',function(e){sy=e.touches[0].clientY;},{passive:true});";
-          js += "document.addEventListener('touchend',function(e){var d=sy-e.changedTouches[0].clientY;if(Math.abs(d)>40){var w=new WheelEvent('wheel',{deltaY:(d>0?1:-1)*1000,bubbles:true});document.body.dispatchEvent(w);setTimeout(ff,800);}},{passive:true});";
+          js += "document.addEventListener('touchend',function(e){var d=sy-e.changedTouches[0].clientY;if(Math.abs(d)>40){var w=new WheelEvent('wheel',{deltaY:(d>0?1:-1)*1000,bubbles:true});document.body.dispatchEvent(w);setTimeout(ff,500);}},{passive:true});";
           
           _controller.runJavaScript(js);
         },
@@ -77,6 +72,7 @@ class _WebViewPageState extends State<WebViewPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      // 不用 SafeArea，让状态栏直接沉浸
       body: WebViewWidget(controller: _controller),
     );
   }
