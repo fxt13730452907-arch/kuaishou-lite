@@ -33,8 +33,8 @@ class _WebViewPageState extends State<WebViewPage> {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      // 伪装成手机浏览器，防止被强制跳转去下载官方App
-      ..setUserAgent("Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+      // 伪装成 Windows 电脑浏览器
+      ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (String url) {
@@ -42,16 +42,17 @@ class _WebViewPageState extends State<WebViewPage> {
           },
           onPageFinished: (String url) {
             setState(() => _isLoading = false);
-            // 注入一段 CSS 隐藏网页顶部和底部的官方下载提示
+            // 尝试隐藏网页的头部导航和底部信息
             _controller.runJavaScript("""
               var style = document.createElement('style');
-              style.innerHTML = '.download-bar, .open-app, header { display: none !important; }';
+              style.innerHTML = 'header, .header, .download-bar, .open-app, .sidebar { display: none !important; }';
               document.head.appendChild(style);
             """);
           },
         ),
       )
-      ..loadRequest(Uri.parse('https://m.kuaishou.com/'));
+      // 加载网页版发现页
+      ..loadRequest(Uri.parse('https://www.kuaishou.com/new-reco'));
   }
 
   @override
@@ -60,7 +61,6 @@ class _WebViewPageState extends State<WebViewPage> {
       canPop: false,
       onPopInvoked: (didPop) async {
         if (didPop) return;
-        // 拦截返回键，如果网页能后退就后退，否则退出App
         if (await _controller.canGoBack()) {
           _controller.goBack();
         } else {
