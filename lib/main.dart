@@ -41,27 +41,104 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
-          // 使用安全的拼接方式，避免任何特殊字符导致编译器崩溃
-          String js = ""
-            "var s=document.createElement('style');"
-            "s.innerHTML='html,body{background:#000!important;overflow:hidden!important;margin:0!important;padding:0!important;}"
-            "header,.header,aside,.sidebar,[class*=header],[class*=nav]{display:none!important;}"
-            "video{width:100vw!important;height:100vh!important;object-fit:cover!important;}"
-            "';"
-            "document.head.appendChild(s);"
-            "var startY=0;"
-            "document.addEventListener('touchstart',function(e){startY=e.touches[0].clientY;},false);"
-            "document.addEventListener('touchend',function(e){"
-            "var endY=e.changedTouches[0].clientY;"
-            "var d=startY-endY;"
-            "if(Math.abs(d)>40){"
-            "var dir=d>0?1:-1;"
-            "var wheel=new WheelEvent('wheel',{deltaY:dir*1000,bubbles:true});"
-            "document.body.dispatchEvent(wheel);"
-            "}"
-            "},false);";
+          _controller.runJavaScript("""
+            // 1. 基础样式
+            var style = document.createElement('style');
+            style.innerHTML = 'html,body{background:#000 !important; overflow-x:hidden !important; margin:0 !important; padding:0 !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
+            document.head.appendChild(style);
+
+            // 2. 清理与强制居中铺满
+            function cleanPage() {
+              document.body.style.setProperty('margin-left', '0', 'important');
+              document.body.style.setProperty('width', '100vw', 'important');
+
+              // 干掉左侧边栏
+              var divs = document.querySelectorAll('div');
+              for (var i = 0; i < divs.length; i++) {
+                var el = divs[i];
+                var rect = el.getBoundingClientRect();
+                if (rect.left <= 5 && rect.width > 80 && rect.width < 350 && rect.height > window.innerHeight * 0.6) {
+                  el.style.setProperty('display', 'none', 'important');
+                }
+              }
+
+              // 干掉提示框
+              var allElements = document.querySelectorAll('*');
+              for (var j = 0; j < allElements.length; j++) {
+                var e = allElements[j];
+                if (e.childNodes.length > 0 && e.childNodes[0].nodeType === 3) {
+                  var txt = e.childNodes[0].nodeValue;
+                  if (txt && (txt.indexOf('空格') > -1 || txt.indexOf('暂停') > -1 || txt.indexOf('播放') > -1 || txt.indexOf('静音') > -1)) {
+                    e.style.setProperty('display', 'none', 'important');
+                  }
+                }
+              }
+
+              // 3. 核心：强行居中铺满
+              var v = document.querySelector('video');
+              if (v) {
+                var p = v;
+                for (var k = 0; k < 4; k++) {
+                  if (p) {
+                    p.style.setProperty('width', '100vw', 'important');
+                    p.style.setProperty('max-width', '100vw', 'important');
+                    p.style.setProperty('margin', '0 auto', 'important');
+                    p.style.setProperty('padding', '0', 'important');
+                    p.style.setProperty('left', '0', 'important');
+                    p.style.setProperty('transform', 'none', 'important');
+                    p = p.parentElement;
+                  }
+                }
+                v.style.setProperty('width', '100vw', 'important');
+                v.style.setProperty('height', '100vh', 'important');
+                v.style.setProperty('object-fit', 'cover', 'important');
+                
+                // 尝试取消静音
+                v.muted = false;
+                v.play().catch(function(e){});
+              }
+            }
             
-          _controller.runJavaScript(js);
+            setTimeout(cleanPage, 1000);
+            setTimeout(cleanPage, 2500);
+
+            // 4. 延迟按 H 键触发全屏
+            setTimeout(function() {
+              var hEvent = new KeyboardEvent('keydown', { 
+                  key: 'h', 
+                  code: 'KeyH', 
+                  keyCode: 72, 
+                  which: 72, 
+                  bubbles: true,
+                  cancelable: true
+              });
+              document.dispatchEvent(hEvent);
+              if (document.body) {
+                  document.body.dispatchEvent(hEvent);
+              }
+            }, 2500); // 延迟 2.5 秒，等待视频加载
+
+            // 5. 滑动引擎
+            var startY = 0;
+            document.addEventListener('touchstart', function(e) {
+                startY = e.touches[0].clientY;
+            }, {passive: true});
+
+            document.addEventListener('touchend', function(e) {
+                var endY = e.changedTouches[0].clientY;
+                var distance = startY - endY;
+                if (Math.abs(distance) > 40) {
+                    var direction = distance > 0 ? 1 : -1;
+                    var centerX = window.innerWidth / 2;
+                    var centerY = window.innerHeight / 2;
+                    var target = document.elementFromPoint(centerX, centerY) || document.body;
+                    var wheelEvent = new WheelEvent('wheel', {
+                        deltaY: direction * 1000, bubbles: true, cancelable: true, clientX: centerX, clientY: centerY
+                    });
+                    target.dispatchEvent(wheelEvent);
+                }
+            }, {passive: true});
+          """);
         },
       ))
       ..loadRequest(Uri.parse('https://www.kuaishou.com/new-reco'));
