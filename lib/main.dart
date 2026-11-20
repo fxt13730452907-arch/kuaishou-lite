@@ -41,46 +41,63 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
           _controller.runJavaScript("""
-            // 1. 暴力注入全局 CSS
+            // 1. 基础清理与黑化
             var style = document.createElement('style');
             style.innerHTML = 'html, body { background: #000 !important; overflow-x: hidden !important; margin: 0 !important; padding: 0 !important; } * { max-width: 100vw !important; }';
             document.head.appendChild(style);
 
+            // 2. 自动寻找并点击“全屏”按钮（仅触发一次）
+            window._hasClickedFullscreen = false;
+            function autoClickFullscreen() {
+              if (window._hasClickedFullscreen) return;
+              
+              // 方法A：寻找带有“全屏”标题的元素
+              var els = document.querySelectorAll('*');
+              for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                var title = el.getAttribute('title') || el.getAttribute('aria-label') || '';
+                if (title.indexOf('全屏') > -1 || title.indexOf('fullscreen') > -1) {
+                  el.click();
+                  window._hasClickedFullscreen = true;
+                  return;
+                }
+              }
+              
+              // 方法B：如果找不到，尝试模拟按下键盘的 'F' 键（PC端播放器快捷键）
+              var event = new KeyboardEvent('keydown', { 'key': 'f', 'keyCode': 70, 'which': 70, 'bubbles': true });
+              document.dispatchEvent(event);
+            }
+
             function cleanPage() {
-              // 2. 暴力干掉所有左侧的侧边栏容器
+              // 清理左侧边栏
               var divs = document.querySelectorAll('div, aside, nav, header');
               for (var i = 0; i < divs.length; i++) {
                 var el = divs[i];
                 var rect = el.getBoundingClientRect();
-                // 只要它靠左 (left<50)，且占了一定宽度(>50)，且比较高(>屏幕50%)，直接干掉
                 if (rect.left < 50 && rect.width > 50 && rect.height > window.innerHeight * 0.5) {
                   el.style.setProperty('display', 'none', 'important');
                 }
               }
 
-              // 3. 暴力释放中心播放器容器
+              // 清理视频父级边距
               var v = document.querySelector('video');
               if (v) {
                 var p = v;
-                // 向上找 7 层父级，彻底清除边距，全部拉满 100vw
                 for (var k = 0; k < 7; k++) {
                   if (p) {
                     p.style.setProperty('width', '100vw', 'important');
-                    p.style.setProperty('max-width', '100vw', 'important');
+                    p.style.setProperty('height', '100vh', 'important');
                     p.style.setProperty('margin', '0', 'important');
                     p.style.setProperty('padding', '0', 'important');
-                    p.style.setProperty('left', '0', 'important');
-                    p.style.setProperty('position', 'relative', 'important');
                     p = p.parentElement;
                   }
                 }
-                // 视频本身强行裁剪铺满
                 v.style.setProperty('width', '100vw', 'important');
                 v.style.setProperty('height', '100vh', 'important');
                 v.style.setProperty('object-fit', 'cover', 'important');
               }
               
-              // 4. 干掉中间的快捷键提示
+              // 干掉提示框
               var allElements = document.querySelectorAll('*');
               for (var j = 0; j < allElements.length; j++) {
                 var e = allElements[j];
@@ -91,13 +108,16 @@ class _WebViewPageState extends State<WebViewPage> {
                   }
                 }
               }
+
+              // 延迟一点，等页面稳定后执行点击全屏
+              setTimeout(autoClickFullscreen, 500);
             }
             
+            // 页面加载后执行清理和自动全屏
             setTimeout(cleanPage, 1000);
             setTimeout(cleanPage, 2500);
-            setTimeout(cleanPage, 4000);
 
-            // 5. 滑动引擎
+            // 3. 滑动引擎（不再触发全屏）
             var startY = 0;
             document.addEventListener('touchstart', function(e) { startY = e.touches[0].clientY; }, {passive: true});
             document.addEventListener('touchend', function(e) {
