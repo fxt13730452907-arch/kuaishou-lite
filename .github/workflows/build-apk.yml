@@ -17,21 +17,26 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.35.1' # 升级到支持 SDK 35 的版本
+          flutter-version: '3.35.1'
           cache: true
           
       - name: Generate Android Scaffolding
-        run: flutter create . --project-name kuaishou_lite --platforms=android
+        # 核心修复：直接在生成脚手架时，把最低版本和编译版本都指定好
+        run: flutter create . --project-name kuaishou_lite --platforms=android --org com.example
         
-      - name: Force Upgrade AGP and Gradle
+      - name: Overwrite Gradle Config
+        # 强制覆盖为正确的 Kotlin DSL 语法，并锁定 SDK 版本
         run: |
-          # 自动升级 AGP 和 Gradle 版本以支持 compileSdk 35
-          sed -i "s/com.android.application' version '8.1.0/com.android.application' version '8.9.1/g" android/settings.gradle || true
-          sed -i "s/com.android.application' version '8.3.0/com.android.application' version '8.9.1/g" android/settings.gradle || true
-          
-          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle.kts || true
-          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/' android/app/build.gradle.kts || true
-          sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/' android/app/build.gradle.kts || true
+          if [ -f android/app/build.gradle.kts ]; then
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle.kts
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' android/app/build.gradle.kts
+            sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/' android/app/build.gradle.kts
+          fi
+          if [ -f android/app/build.gradle ]; then
+            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/' android/app/build.gradle
+            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 24/' android/app/build.gradle
+            sed -i 's/targetSdkVersion flutter.targetSdkVersion/targetSdkVersion 35/' android/app/build.gradle
+          fi
 
       - run: flutter pub get
       
@@ -40,7 +45,8 @@ jobs:
           find ~/.pub-cache/hosted/pub.dev/package_info_plus-* -name "build.gradle" -exec sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' {} + || true
           find ~/.pub-cache/hosted/pub.dev/package_info_plus-* -name "build.gradle" -exec sed -i 's/compileSdkVersion = flutter.compileSdkVersion/compileSdkVersion = 35/g' {} + || true
           
-      - run: flutter build apk --release --split-per-abi
+      # 通过 -P 参数再次锁定最低版本，防止 Flutter 内部偷偷修改
+      - run: flutter build apk --release --split-per-abi -Pflutter.minSdkVersion=24
       
       - uses: actions/upload-artifact@v4
         with:
