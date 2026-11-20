@@ -34,43 +34,33 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
-          // 注入几何物理清理大法 + 强制全屏
+          // 物理位移：把整个网页向左推，挤出侧边栏
           _controller.runJavaScript("""
-            setTimeout(function(){
-              // 1. 把视频所在的父级容器，一层层往上扒，全部强制拉满屏幕
-              var v = document.querySelector('video');
-              if (v) {
-                var p = v;
-                for (var i = 0; i < 6; i++) {
-                  if (p) {
-                    p.style.setProperty('width', '100vw', 'important');
-                    p.style.setProperty('height', '100vh', 'important');
-                    p.style.setProperty('max-width', '100vw', 'important');
-                    p.style.setProperty('max-height', '100vh', 'important');
-                    p.style.setProperty('margin', '0', 'important');
-                    p.style.setProperty('padding', '0', 'important');
-                    p.style.setProperty('left', '0', 'important');
-                    p.style.setProperty('right', '0', 'important');
-                    p.style.setProperty('top', '0', 'important');
-                    p = p.parentNode;
-                  }
-                }
-              }
-              
-              // 2. 暴力扫描并隐藏左侧边栏
-              var els = document.querySelectorAll('div, aside, nav, header');
-              for (var j = 0; j < els.length; j++) {
-                var el = els[j];
+            setInterval(function() {
+              // 1. 隐藏左侧边栏
+              var divs = document.querySelectorAll('div, aside, nav');
+              for (var i = 0; i < divs.length; i++) {
+                var el = divs[i];
                 var rect = el.getBoundingClientRect();
-                // 只要又高又窄，且靠左，直接干掉
-                if (rect.width > 50 && rect.width < 350 && rect.height > window.innerHeight * 0.7 && rect.left < 30) {
+                if (rect.width > 80 && rect.width < 350 && rect.height > window.innerHeight * 0.6 && rect.left < 50) {
                   el.style.setProperty('display', 'none', 'important');
                 }
               }
               
-              // 3. 全局变黑
+              // 2. 把整个网页往左硬拉 200px，强行盖住黑边
+              document.body.style.setProperty('margin-left', '-220px', 'important');
+              document.body.style.setProperty('width', 'calc(100vw + 220px)', 'important');
+              document.body.style.setProperty('overflow-x', 'hidden', 'important');
               document.body.style.setProperty('background', '#000', 'important');
-            }, 1500);
+
+              // 3. 让视频稍微放大一点点，填满右侧空间
+              var v = document.querySelector('video');
+              if (v) {
+                v.style.setProperty('width', '100vw', 'important');
+                v.style.setProperty('height', '100vh', 'important');
+                v.style.setProperty('object-fit', 'cover', 'important');
+              }
+            }, 1000);
           """);
         },
       ))
