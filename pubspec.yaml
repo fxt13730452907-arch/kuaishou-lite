@@ -9,11 +9,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  webview_flutter: 4.7.0
-
-# 强制锁定底层依赖版本，防止自动升级导致不兼容
-dependency_overrides:
-  webview_flutter_android: 3.16.9
+  webview_flutter: ^4.7.0
 
 flutter:
   uses-material-design: true
