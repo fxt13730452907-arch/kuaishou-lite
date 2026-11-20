@@ -42,15 +42,21 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
           _controller.runJavaScript("""
+            // 1. 注入基础样式
             var style = document.createElement('style');
             style.innerHTML = 'html,body{background:#000 !important;overflow-x:hidden !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
             document.head.appendChild(style);
 
+            // 2. 清理函数
             function cleanPage() {
               document.documentElement.style.setProperty('background', '#000', 'important');
               document.body.style.setProperty('background', '#000', 'important');
+              
+              // 去除左边缝隙
+              document.body.style.setProperty('margin-left', '-15px', 'important');
+              document.body.style.setProperty('width', 'calc(100vw + 15px)', 'important');
 
-              // 1. 干掉左侧边栏
+              // 干掉左侧边栏
               var divs = document.querySelectorAll('div');
               for (var i = 0; i < divs.length; i++) {
                 var el = divs[i];
@@ -60,44 +66,66 @@ class _WebViewPageState extends State<WebViewPage> {
                 }
               }
 
-              // 2. 干掉中间提示框
+              // 干掉“暂停 空格”提示框
               var allElements = document.querySelectorAll('*');
               for (var j = 0; j < allElements.length; j++) {
                 var e = allElements[j];
                 if (e.childNodes.length > 0 && e.childNodes[0].nodeType === 3) {
                   var txt = e.childNodes[0].nodeValue;
-                  if (txt && (txt.indexOf('播放') > -1 && txt.indexOf('空格') > -1)) {
+                  if (txt && (txt.indexOf('空格') > -1 || txt.indexOf('暂停') > -1 || txt.indexOf('播放') > -1)) {
                     e.style.setProperty('display', 'none', 'important');
                     if(e.parentElement) e.parentElement.style.setProperty('display', 'none', 'important');
                   }
                 }
               }
-
-              // 3. 核心修复：消除左侧黑边
-              // 把视频以及它的 5 层父节点全部强制设置 margin/padding 为 0，并拉宽
-              var v = document.querySelector('video');
-              if (v) {
-                var node = v;
-                for (var k = 0; k < 5; k++) {
-                  if (node) {
-                    node.style.setProperty('margin-left', '0', 'important');
-                    node.style.setProperty('padding-left', '0', 'important');
-                    node.style.setProperty('max-width', 'none', 'important');
-                    node.style.setProperty('width', '100vw', 'important');
-                    node.style.setProperty('left', '0', 'important');
-                    node = node.parentElement;
-                  }
-                }
-              }
-              
-              // 4. 兜底：整体网页向左强行偏移 -15px，并拉宽，吃掉最后的边缘缝隙
-              document.body.style.setProperty('margin-left', '-15px', 'important');
-              document.body.style.setProperty('width', 'calc(100vw + 15px)', 'important');
             }
 
             setTimeout(cleanPage, 500);
             setTimeout(cleanPage, 1500);
-            setTimeout(cleanPage, 3000);
+
+            // 3. 核心：加入强制手势滑动引擎 (模拟鼠标滚轮)
+            var startY = 0;
+            var isScrolling = false;
+
+            document.addEventListener('touchstart', function(e) {
+                startY = e.touches[0].clientY;
+            }, {passive: false});
+
+            document.addEventListener('touchmove', function(e) {
+                if (Math.abs(e.touches[0].clientY - startY) > 10) {
+                    e.preventDefault(); 
+                }
+            }, {passive: false});
+
+            document.addEventListener('touchend', function(e) {
+                var endY = e.changedTouches[0].clientY;
+                var distance = startY - endY;
+                
+                if (Math.abs(distance) > 40 && !isScrolling) {
+                    isScrolling = true;
+                    var direction = distance > 0 ? 1 : -1;
+                    
+                    var centerX = window.innerWidth / 2;
+                    var centerY = window.innerHeight / 2;
+                    var target = document.elementFromPoint(centerX, centerY) || document.body;
+                    
+                    // 模拟滚轮事件
+                    var wheelEvent = new WheelEvent('wheel', {
+                        deltaY: direction * 1000,
+                        bubbles: true,
+                        cancelable: true,
+                        clientX: centerX,
+                        clientY: centerY
+                    });
+                    target.dispatchEvent(wheelEvent);
+                    window.scrollBy({ top: direction * window.innerHeight * 0.85, behavior: 'smooth' });
+
+                    setTimeout(function() { 
+                        isScrolling = false; 
+                        cleanPage(); // 滑动后顺便清理一下可能新弹出的提示
+                    }, 600);
+                }
+            }, {passive: false});
           """);
         },
         onWebResourceError: (WebResourceError error) {
