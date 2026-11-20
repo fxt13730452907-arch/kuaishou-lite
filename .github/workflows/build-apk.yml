@@ -17,14 +17,28 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.24.0'
+          flutter-version: '3.22.2' # 换用最稳定的版本，避开最新版的坑
           cache: true
           
-      # 核心修复：自动生成缺失的 android 等原生项目脚手架，并指定项目名
       - name: Generate Android Scaffolding
         run: flutter create . --project-name kuaishou_lite --platforms=android
         
+      - name: Fix Android SDK versions
+        run: |
+          # 强制把安卓版本提到 35，解决播放器的警告
+          sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle.kts
+          sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/' android/app/build.gradle
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/' android/app/build.gradle.kts
+          sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/' android/app/build.gradle
+
       - run: flutter pub get
+      
+      - name: Fix package_info_plus bug
+        run: |
+          # 强制修复插件的报错问题
+          find ~/.pub-cache/hosted/pub.dev/package_info_plus-* -name "build.gradle" -exec sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 35/g' {} +
+          find ~/.pub-cache/hosted/pub.dev/package_info_plus-* -name "build.gradle" -exec sed -i 's/compileSdkVersion = flutter.compileSdkVersion/compileSdkVersion = 35/g' {} +
+          
       - run: flutter build apk --release --split-per-abi
       
       - uses: actions/upload-artifact@v4
