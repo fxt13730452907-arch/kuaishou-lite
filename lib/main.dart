@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-// 导入手势识别器工厂
-import 'package:flutter/gestures.dart'; 
 import 'package:webview_flutter/webview_flutter.dart';
 
 void main() {
@@ -42,7 +40,6 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
-          // JS 脚本保持不变，用于界面黑化和模拟滚轮滑动
           _controller.runJavaScript("""
             // 1. 基础样式黑化
             var style = document.createElement('style');
@@ -75,26 +72,22 @@ class _WebViewPageState extends State<WebViewPage> {
             setTimeout(cleanPage, 1000);
             setTimeout(cleanPage, 2500);
 
-            // 3. 强制滑动手势 (JS模拟滚轮，作为 gestureRecognizers 的补充)
+            // 3. 滑动引擎：不拦截原生滑动，仅在滑动结束时补发一个滚轮事件
             var startY = 0;
-            var isScrolling = false;
             document.addEventListener('touchstart', function(e) {
                 startY = e.touches[0].clientY;
-            }, {passive: false});
-            document.addEventListener('touchmove', function(e) {
-                if (Math.abs(e.touches[0].clientY - startY) > 10) {
-                    e.preventDefault(); 
-                }
-            }, {passive: false});
+            }, {passive: true}); // 注意这里改成了 passive: true，不再拦截
+
             document.addEventListener('touchend', function(e) {
                 var endY = e.changedTouches[0].clientY;
                 var distance = startY - endY;
-                if (Math.abs(distance) > 40 && !isScrolling) {
-                    isScrolling = true;
+                if (Math.abs(distance) > 40) {
                     var direction = distance > 0 ? 1 : -1;
                     var centerX = window.innerWidth / 2;
                     var centerY = window.innerHeight / 2;
                     var target = document.elementFromPoint(centerX, centerY) || document.body;
+                    
+                    // 补发鼠标滚轮事件，让 PC 网页响应
                     var wheelEvent = new WheelEvent('wheel', {
                         deltaY: direction * 1000,
                         bubbles: true,
@@ -103,12 +96,8 @@ class _WebViewPageState extends State<WebViewPage> {
                         clientY: centerY
                     });
                     target.dispatchEvent(wheelEvent);
-                    window.scrollBy({ top: direction * window.innerHeight * 0.85, behavior: 'smooth' });
-                    setTimeout(function() { 
-                        isScrolling = false; 
-                    }, 600);
                 }
-            }, {passive: false});
+            }, {passive: true});
           """);
         },
       ))
@@ -119,13 +108,7 @@ class _WebViewPageState extends State<WebViewPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: WebViewWidget(
-        controller: _controller,
-        // 👇 核心修改：声明WebView优先处理垂直拖动，解决滑动失效问题
-        gestureRecognizers: {
-          Factory<VerticalDragGestureRecognizer>(() => VerticalDragGestureRecognizer()),
-        },
-      ),
+      body: WebViewWidget(controller: _controller),
     );
   }
 }
