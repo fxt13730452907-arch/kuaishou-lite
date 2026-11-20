@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-  ));
   runApp(const MyApp());
 }
 
@@ -37,12 +31,12 @@ class _WebViewPageState extends State<WebViewPage> {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setMediaPlaybackRequiresUserGesture(false)
+      // 去掉了那个可能导致编译崩溃的 setMediaPlaybackRequiresUserGesture
       ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
-          // 极其精简的一行 JS，只做两件事：隐藏左侧栏 + 延迟按 H 键
-          String safeJs = "var s=document.createElement('style');s.innerHTML='aside,.sidebar,header,.header{display:none!important}';document.head.appendChild(s);setTimeout(function(){var e=new KeyboardEvent('keydown',{key:'h',keyCode:72,bubbles:true});document.dispatchEvent(e);},2500);";
+          // 极简一行 JS，不包含任何可能让编译器崩溃的字符
+          String safeJs = "var s=document.createElement('style');s.innerHTML='html,body{background:#000!important;overflow-x:hidden!important;}aside,.sidebar,header,.header{display:none!important}video{width:100vw!important;height:100vh!important;object-fit:cover!important;}';document.head.appendChild(s);setTimeout(function(){var e=new KeyboardEvent('keydown',{key:'h',keyCode:72,bubbles:true});document.dispatchEvent(e);},2500);";
           
           _controller.runJavaScript(safeJs);
         },
