@@ -41,62 +41,26 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
           _controller.runJavaScript("""
-            // 1. 基础清理与黑化
+            // 1. 基础样式
             var style = document.createElement('style');
-            style.innerHTML = 'html, body { background: #000 !important; overflow-x: hidden !important; margin: 0 !important; padding: 0 !important; } * { max-width: 100vw !important; }';
+            style.innerHTML = 'html,body{background:#000 !important; overflow-x:hidden !important; margin:0 !important; padding:0 !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
             document.head.appendChild(style);
 
-            // 2. 自动寻找并点击“全屏”按钮（仅触发一次）
-            window._hasClickedFullscreen = false;
-            function autoClickFullscreen() {
-              if (window._hasClickedFullscreen) return;
-              
-              // 方法A：寻找带有“全屏”标题的元素
-              var els = document.querySelectorAll('*');
-              for (var i = 0; i < els.length; i++) {
-                var el = els[i];
-                var title = el.getAttribute('title') || el.getAttribute('aria-label') || '';
-                if (title.indexOf('全屏') > -1 || title.indexOf('fullscreen') > -1) {
-                  el.click();
-                  window._hasClickedFullscreen = true;
-                  return;
-                }
-              }
-              
-              // 方法B：如果找不到，尝试模拟按下键盘的 'F' 键（PC端播放器快捷键）
-              var event = new KeyboardEvent('keydown', { 'key': 'f', 'keyCode': 70, 'which': 70, 'bubbles': true });
-              document.dispatchEvent(event);
-            }
-
+            // 2. 清理与强制居中铺满
             function cleanPage() {
-              // 清理左侧边栏
-              var divs = document.querySelectorAll('div, aside, nav, header');
+              document.body.style.setProperty('margin-left', '0', 'important');
+              document.body.style.setProperty('width', '100vw', 'important');
+
+              // 干掉左侧边栏
+              var divs = document.querySelectorAll('div');
               for (var i = 0; i < divs.length; i++) {
                 var el = divs[i];
                 var rect = el.getBoundingClientRect();
-                if (rect.left < 50 && rect.width > 50 && rect.height > window.innerHeight * 0.5) {
+                if (rect.left <= 5 && rect.width > 80 && rect.width < 350 && rect.height > window.innerHeight * 0.6) {
                   el.style.setProperty('display', 'none', 'important');
                 }
               }
 
-              // 清理视频父级边距
-              var v = document.querySelector('video');
-              if (v) {
-                var p = v;
-                for (var k = 0; k < 7; k++) {
-                  if (p) {
-                    p.style.setProperty('width', '100vw', 'important');
-                    p.style.setProperty('height', '100vh', 'important');
-                    p.style.setProperty('margin', '0', 'important');
-                    p.style.setProperty('padding', '0', 'important');
-                    p = p.parentElement;
-                  }
-                }
-                v.style.setProperty('width', '100vw', 'important');
-                v.style.setProperty('height', '100vh', 'important');
-                v.style.setProperty('object-fit', 'cover', 'important');
-              }
-              
               // 干掉提示框
               var allElements = document.querySelectorAll('*');
               for (var j = 0; j < allElements.length; j++) {
@@ -109,17 +73,55 @@ class _WebViewPageState extends State<WebViewPage> {
                 }
               }
 
-              // 延迟一点，等页面稳定后执行点击全屏
-              setTimeout(autoClickFullscreen, 500);
+              // 3. 核心：强行居中铺满
+              var v = document.querySelector('video');
+              if (v) {
+                var p = v;
+                for (var k = 0; k < 4; k++) {
+                  if (p) {
+                    p.style.setProperty('width', '100vw', 'important');
+                    p.style.setProperty('max-width', '100vw', 'important');
+                    p.style.setProperty('margin', '0 auto', 'important');
+                    p.style.setProperty('padding', '0', 'important');
+                    p.style.setProperty('left', '0', 'important');
+                    p.style.setProperty('transform', 'none', 'important');
+                    p = p.parentElement;
+                  }
+                }
+                v.style.setProperty('width', '100vw', 'important');
+                v.style.setProperty('height', '100vh', 'important');
+                v.style.setProperty('object-fit', 'cover', 'important');
+              }
             }
             
-            // 页面加载后执行清理和自动全屏
             setTimeout(cleanPage, 1000);
             setTimeout(cleanPage, 2500);
 
-            // 3. 滑动引擎（不再触发全屏）
+            // 4. 核心新增：安全延迟后，自动帮你点一次“全屏”按钮
+            window._hasAutoClicked = false;
+            function clickFullscreen() {
+              if (window._hasAutoClicked) return;
+              // 找带有 title="全屏" 或者相关的元素
+              var els = document.querySelectorAll('div, button, span, svg, path');
+              for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                var title = el.getAttribute('title') || el.getAttribute('aria-label') || '';
+                if (title.indexOf('全屏') > -1 || title.indexOf('fullscreen') > -1) {
+                  el.click();
+                  window._hasAutoClicked = true;
+                  return;
+                }
+              }
+            }
+            // 等 2.5 秒（网页和视频都加载完）再点，防止黑屏
+            setTimeout(clickFullscreen, 2500);
+
+            // 5. 滑动引擎
             var startY = 0;
-            document.addEventListener('touchstart', function(e) { startY = e.touches[0].clientY; }, {passive: true});
+            document.addEventListener('touchstart', function(e) {
+                startY = e.touches[0].clientY;
+            }, {passive: true});
+
             document.addEventListener('touchend', function(e) {
                 var endY = e.changedTouches[0].clientY;
                 var distance = startY - endY;
@@ -128,7 +130,9 @@ class _WebViewPageState extends State<WebViewPage> {
                     var centerX = window.innerWidth / 2;
                     var centerY = window.innerHeight / 2;
                     var target = document.elementFromPoint(centerX, centerY) || document.body;
-                    var wheelEvent = new WheelEvent('wheel', { deltaY: direction * 1000, bubbles: true, cancelable: true, clientX: centerX, clientY: centerY });
+                    var wheelEvent = new WheelEvent('wheel', {
+                        deltaY: direction * 1000, bubbles: true, cancelable: true, clientX: centerX, clientY: centerY
+                    });
                     target.dispatchEvent(wheelEvent);
                 }
             }, {passive: true});
