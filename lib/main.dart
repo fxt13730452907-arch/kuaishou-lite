@@ -1,14 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    statusBarBrightness: Brightness.dark,
-  ));
   runApp(const MyApp());
 }
 
@@ -32,42 +25,44 @@ class WebViewPage extends StatefulWidget {
 
 class _WebViewPageState extends State<WebViewPage> {
   late final WebViewController _controller;
-  String _jsCode = "";
 
   @override
   void initState() {
     super.initState();
-    _loadJsAndInitWebView();
-  }
-
-  Future<void> _loadJsAndInitWebView() async {
-    // 这里适配你建好的双层路径
-    _jsCode = await rootBundle.loadString('assets/assets/inject.js');
-    
-    _controller = WebViewController();
-    _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-    _controller.setMediaPlaybackRequiresUserGesture(false);
-    _controller.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
-    
-    _controller.setNavigationDelegate(
-      NavigationDelegate(
-        onPageFinished: (String url) {
-          _controller.runJavaScript(_jsCode);
-        },
-      ),
-    );
-    _controller.loadRequest(Uri.parse('https://www.kuaishou.com/new-reco'));
-    
-    if (mounted) setState(() {});
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setMediaPlaybackRequiresUserGesture(false)
+      ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (String url) {
+            _controller.runJavaScript("""
+              var style = document.createElement('style');
+              style.innerHTML = 'aside, .sidebar, header, .header, .download-bar { display: none !important; } body { background: #000; } video { width: 100vw !important; height: 100vh !important; object-fit: cover !important; }';
+              document.head.appendChild(style);
+              
+              function unmute() {
+                  var vids = document.querySelectorAll('video');
+                  for (var i=0; i<vids.length; i++) {
+                      vids[i].muted = false;
+                      vids[i].play();
+                  }
+              }
+              unmute();
+              setInterval(unmute, 1500);
+              document.addEventListener('touchstart', unmute, { once: true });
+            """);
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse('https://www.kuaishou.com/new-reco'));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: _controller == null 
-          ? const Center(child: CircularProgressIndicator(color: Colors.red))
-          : WebViewWidget(controller: _controller),
+      body: WebViewWidget(controller: _controller),
     );
   }
 }
