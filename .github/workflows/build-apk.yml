@@ -14,10 +14,11 @@ jobs:
           distribution: temurin
           java-version: '17'
           
+      # 换回非常稳定的 3.24.0 版本，避开 3.35 的底层 Bug
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.35.1'
+          flutter-version: '3.24.0'
           cache: true
           
       - name: Generate Android Scaffolding
@@ -27,24 +28,24 @@ jobs:
         run: |
           sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET" />\n    <application|' android/app/src/main/AndroidManifest.xml
           
+          # 增加 Gradle 内存，防止编译 OOM
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> android/gradle.properties
+          
+          # 锁定 SDK 34 保证兼容性
+          if [ -f android/app/build.gradle ]; then
+            sed -i 's/compileSdkVersion flutter.compileSdkVersion/compileSdkVersion 34/' android/app/build.gradle
+            sed -i 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 21/' android/app/build.gradle
+          fi
           if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle.kts
-            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' android/app/build.gradle.kts
-            sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/' android/app/build.gradle.kts
+            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 34/' android/app/build.gradle.kts
+            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/' android/app/build.gradle.kts
           fi
 
-      # 核心修复：在拉取依赖前，彻底清理项目、Dart 和 Pub 缓存
-      - name: Deep Clean Everything
-        run: |
-          flutter clean
-          rm -rf .dart_tool
-          rm -rf build
-          flutter pub cache repair
-          
+      - run: flutter clean
       - run: flutter pub get
       
-      # 构建时加上 -Pflutter.minSdkVersion=24 作为额外保险
-      - run: flutter build apk --release --split-per-abi -Pflutter.minSdkVersion=24
+      # 加上 --no-tree-shake-icons 防止图标编译崩溃
+      - run: flutter build apk --release --no-tree-shake-icons --split-per-abi
       
       - uses: actions/upload-artifact@v4
         with:
