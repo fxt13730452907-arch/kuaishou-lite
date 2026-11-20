@@ -17,45 +17,17 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.35.1'
+          flutter-version: '3.22.2'
           cache: true
           
-      - name: Generate Android Scaffolding
+      - name: Generate Android Project
         run: flutter create . --project-name kuaishou_lite --platforms=android --org com.example
-
-      # 核心修复：兼容新旧格式，并强制加大内存防崩溃
-      - name: Force Upgrade Gradle & AGP
-        run: |
-          # 1. 升级 Gradle Wrapper
-          if [ -f android/gradle/wrapper/gradle-wrapper.properties ]; then
-            sed -i 's|distributionUrl=.*|distributionUrl=https\\://services.gradle.org/distributions/gradle-8.10-all.zip|' android/gradle/wrapper/gradle-wrapper.properties
-          fi
-          
-          # 2. 兼容修改 AGP 版本
-          if [ -f android/settings.gradle ]; then
-            sed -i "s/com.android.application' version '.*'/com.android.application' version '8.7.2'/" android/settings.gradle || true
-          fi
-          if [ -f android/settings.gradle.kts ]; then
-            sed -i 's/id("com.android.application") version ".*"/id("com.android.application") version "8.7.2"/' android/settings.gradle.kts || true
-          fi
-
-          # 3. 强制给 Gradle 分配 4GB 内存，防止 compileFlutterBuildRelease 因内存不足失败
-          if [ -f android/gradle.properties ]; then
-            echo "org.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g" >> android/gradle.properties
-          fi
-
-      - name: Inject Network Permission & Fix SDK
+        
+      - name: Add Network Permission
         run: |
           sed -i 's|<application|<uses-permission android:name="android.permission.INTERNET" />\n    <application|' android/app/src/main/AndroidManifest.xml
-          
-          if [ -f android/app/build.gradle.kts ]; then
-            sed -i 's/compileSdk = flutter.compileSdkVersion/compileSdk = 35/' android/app/build.gradle.kts
-            sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 24/' android/app/build.gradle.kts
-            sed -i 's/targetSdk = flutter.targetSdkVersion/targetSdk = 35/' android/app/build.gradle.kts
-          fi
 
       - run: flutter pub get
-      - run: flutter clean
       - run: flutter build apk --release --split-per-abi
       
       - uses: actions/upload-artifact@v4
