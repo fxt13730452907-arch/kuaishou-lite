@@ -41,15 +41,14 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
           _controller.runJavaScript("""
-            // 1. 基础样式黑化
+            // 1. 隐藏多余元素并黑化背景
             var style = document.createElement('style');
-            style.innerHTML = 'html,body{background:#000 !important;overflow-x:hidden !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
+            style.innerHTML = 'html,body{background:#000 !important; overflow-x:hidden !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
             document.head.appendChild(style);
 
             // 2. 清理页面
             function cleanPage() {
-              document.body.style.setProperty('margin-left', '-15px', 'important');
-              document.body.style.setProperty('width', 'calc(100vw + 15px)', 'important');
+              // 干掉左侧边栏
               var divs = document.querySelectorAll('div');
               for (var i = 0; i < divs.length; i++) {
                 var el = divs[i];
@@ -58,6 +57,8 @@ class _WebViewPageState extends State<WebViewPage> {
                   el.style.setProperty('display', 'none', 'important');
                 }
               }
+
+              // 干掉提示框
               var allElements = document.querySelectorAll('*');
               for (var j = 0; j < allElements.length; j++) {
                 var e = allElements[j];
@@ -68,15 +69,33 @@ class _WebViewPageState extends State<WebViewPage> {
                   }
                 }
               }
+
+              // 3. 核心：强制视频铺满放大
+              var v = document.querySelector('video');
+              if (v) {
+                // 强制视频容器铺满屏幕
+                v.style.setProperty('width', '100vw', 'important');
+                v.style.setProperty('height', '100vh', 'important');
+                // 自动缩放裁剪，不留黑边
+                v.style.setProperty('object-fit', 'cover', 'important'); 
+                
+                // 如果视频父容器有宽度限制，一并解除
+                if (v.parentElement) {
+                    v.parentElement.style.setProperty('width', '100vw', 'important');
+                    v.parentElement.style.setProperty('max-width', '100vw', 'important');
+                }
+              }
             }
+            
+            // 延迟执行，确保视频已经加载
             setTimeout(cleanPage, 1000);
             setTimeout(cleanPage, 2500);
 
-            // 3. 滑动引擎：不拦截原生滑动，仅在滑动结束时补发一个滚轮事件
+            // 4. 滑动引擎
             var startY = 0;
             document.addEventListener('touchstart', function(e) {
                 startY = e.touches[0].clientY;
-            }, {passive: true}); // 注意这里改成了 passive: true，不再拦截
+            }, {passive: true});
 
             document.addEventListener('touchend', function(e) {
                 var endY = e.changedTouches[0].clientY;
@@ -86,14 +105,8 @@ class _WebViewPageState extends State<WebViewPage> {
                     var centerX = window.innerWidth / 2;
                     var centerY = window.innerHeight / 2;
                     var target = document.elementFromPoint(centerX, centerY) || document.body;
-                    
-                    // 补发鼠标滚轮事件，让 PC 网页响应
                     var wheelEvent = new WheelEvent('wheel', {
-                        deltaY: direction * 1000,
-                        bubbles: true,
-                        cancelable: true,
-                        clientX: centerX,
-                        clientY: centerY
+                        deltaY: direction * 1000, bubbles: true, cancelable: true, clientX: centerX, clientY: centerY
                     });
                     target.dispatchEvent(wheelEvent);
                 }
