@@ -42,94 +42,91 @@ class _WebViewPageState extends State<WebViewPage> {
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
           _controller.runJavaScript("""
-            // 1. 基础样式重置
+            // 1. 基础样式
             var style = document.createElement('style');
-            style.innerHTML = 'html,body{background:#000 !important; overflow:hidden !important; margin:0 !important; padding:0 !important; width:100vw !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
+            style.innerHTML = 'html,body{background:#000 !important; overflow:hidden !important; margin:0 !important; padding:0 !important; width:100vw !important; height:100vh !important;}';
             document.head.appendChild(style);
 
-            // 2. 清理与布局修复
-            function cleanPage() {
-              // 干掉左侧边栏
-              var divs = document.querySelectorAll('div');
-              for (var i = 0; i < divs.length; i++) {
-                var el = divs[i];
-                var rect = el.getBoundingClientRect();
-                if (rect.left <= 5 && rect.width > 80 && rect.width < 350 && rect.height > window.innerHeight * 0.6) {
-                  el.style.setProperty('display', 'none', 'important');
-                }
-              }
-
-              // 干掉提示框
-              var allElements = document.querySelectorAll('*');
-              for (var j = 0; j < allElements.length; j++) {
-                var e = allElements[j];
-                if (e.childNodes.length > 0 && e.childNodes[0].nodeType === 3) {
-                  var txt = e.childNodes[0].nodeValue;
-                  if (txt && (txt.indexOf('空格') > -1 || txt.indexOf('暂停') > -1 || txt.indexOf('播放') > -1)) {
-                    e.style.setProperty('display', 'none', 'important');
-                  }
-                }
-              }
-
-              // 3. 核心：干掉左侧黑边，让视频铺满
+            // 2. 核心清理逻辑
+            function fixLayout() {
+              // ================= 第一步：暴力碾碎左侧黑边 =================
               var v = document.querySelector('video');
               if (v) {
                 var p = v;
-                // 向上遍历 6 层父节点，暴力清除所有偏移量
-                for (var k = 0; k < 6; k++) {
+                // 向上找 8 层父容器，全部强制宽度 100vw，边距归零，定位重置
+                for (var k = 0; k < 8; k++) {
                   if (p) {
                     p.style.setProperty('width', '100vw', 'important');
                     p.style.setProperty('max-width', '100vw', 'important');
+                    p.style.setProperty('height', '100vh', 'important');
                     p.style.setProperty('margin', '0', 'important');
                     p.style.setProperty('padding', '0', 'important');
                     p.style.setProperty('left', '0', 'important');
+                    p.style.setProperty('top', '0', 'important');
                     p.style.setProperty('right', '0', 'important');
+                    p.style.setProperty('bottom', '0', 'important');
                     p.style.setProperty('transform', 'none', 'important');
+                    p.style.setProperty('border-radius', '0', 'important'); // 去圆角
                     p = p.parentElement;
                   }
                 }
+                
+                // 视频本体铺满，并且画面左对齐
                 v.style.setProperty('width', '100vw', 'important');
                 v.style.setProperty('height', '100vh', 'important');
                 v.style.setProperty('object-fit', 'cover', 'important');
-                
-                // 🔥 强行让画面向右对齐，以抵消左侧的留白（视觉上画面整体左移）
-                v.style.setProperty('object-position', 'right center', 'important'); 
+                v.style.setProperty('object-position', 'left center', 'important'); // 画面整体靠左
               }
 
-              // 4. 找回右下角全屏按钮
-              // 找到底部控制栏，强制往左拉回屏幕内
+              // ================= 第二步：暴力找回全屏按钮 =================
               var allDivs = document.querySelectorAll('div');
-              for (var m = 0; m < allDivs.length; m++) {
-                var div = allDivs[m];
+              for (var j = 0; j < allDivs.length; j++) {
+                var div = allDivs[j];
                 var txt = div.innerText || '';
-                // 识别底部控制栏（包含倍速或时间）
-                if ((txt.includes('倍速') || txt.match(/\d{2}:\d{2}/)) && div.offsetHeight < 150) {
+                // 1. 寻找包含“倍速”或时间格式的底部控制栏
+                if ((txt.includes('倍速') || txt.match(/\d{2}:\d{2}/)) && div.offsetHeight < 200) {
                   div.style.setProperty('width', '100vw', 'important');
                   div.style.setProperty('box-sizing', 'border-box', 'important');
-                  // 去掉你之前说不要的安全距离，直接把右边距设死
-                  div.style.setProperty('padding-right', '0', 'important');
-                  // 🔥 核心：把整个控制栏往左强行拉扯，把全屏按钮拉出来
-                  div.style.setProperty('right', '10px', 'important'); 
+                  
+                  // 🔥 关键修复：不加 padding，直接利用 right 强制把整个控制栏往左拉，露出右边的全屏按钮
+                  div.style.setProperty('right', '0px', 'important'); 
+                  div.style.setProperty('padding-right', '80px', 'important'); // 强行在右侧挤出一大块空间
+                  
+                  // 检查控制栏内部，强行唤醒全屏图标
+                  var children = div.querySelectorAll('*');
+                  for (var m = 0; m < children.length; m++) {
+                    var child = children[m];
+                    var title = child.getAttribute('title') || child.getAttribute('aria-label') || child.className || '';
+                    // 如果找到带“全屏”或 "full" 字样的元素
+                    if (title.toString().indexOf('全屏') > -1 || title.toString().indexOf('fullscreen') > -1 || title.toString().indexOf('full') > -1) {
+                      child.style.setProperty('display', 'block', 'important');
+                      child.style.setProperty('visibility', 'visible', 'important');
+                      child.style.setProperty('opacity', '1', 'important');
+                      child.style.setProperty('position', 'relative', 'important');
+                      child.style.setProperty('right', '0', 'important');
+                      child.style.setProperty('transform', 'none', 'important');
+                    }
+                  }
                 }
               }
-
-              // 🔥 暴力抢救全屏按钮（即使被隐藏了也给它弄出来）
-              var els = document.querySelectorAll('div, button, span, svg, path');
-              for (var n = 0; n < els.length; n++) {
-                var el = els[n];
-                var title = el.getAttribute('title') || el.getAttribute('aria-label') || '';
-                if (title.indexOf('全屏') > -1 || title.indexOf('fullscreen') > -1) {
-                  el.style.setProperty('display', 'block', 'important');
-                  el.style.setProperty('visibility', 'visible', 'important');
-                  el.style.setProperty('opacity', '1', 'important');
-                }
-              }
+              
+              // ================= 第三步：模拟鼠标移动 =================
+              // 部分电脑版网页，控制栏需要鼠标移动才显示
+              var event = new MouseEvent('mousemove', {
+                  clientX: window.innerWidth / 2,
+                  clientY: window.innerHeight - 50,
+                  bubbles: true,
+                  cancelable: true
+              });
+              document.dispatchEvent(event);
             }
             
-            setTimeout(cleanPage, 1000);
-            setTimeout(cleanPage, 2500);
+            // 网页加载有延迟，多执行几次
+            setTimeout(fixLayout, 800);
+            setTimeout(fixLayout, 1500);
+            setTimeout(fixLayout, 3000);
 
-            // 5. 自动点击全屏
+            // 4. 自动点击全屏（可选）
             window._hasAutoClicked = false;
             function clickFullscreen() {
               if (window._hasAutoClicked) return;
@@ -146,7 +143,7 @@ class _WebViewPageState extends State<WebViewPage> {
             }
             setTimeout(clickFullscreen, 2500);
 
-            // 6. 滑动引擎
+            // 5. 滑动引擎
             var startY = 0;
             document.addEventListener('touchstart', function(e) {
                 startY = e.touches[0].clientY;
