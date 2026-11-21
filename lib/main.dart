@@ -43,12 +43,12 @@ class _WebViewPageState extends State<WebViewPage> {
           _controller.runJavaScript("""
             // 1. 基础样式
             var style = document.createElement('style');
-            style.innerHTML = 'html,body{background:#000 !important; overflow-x:hidden !important; margin:0 !important; padding:0 !important; width:100% !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
+            style.innerHTML = 'html,body{background:#000 !important; overflow-x:hidden !important; margin:0 !important; padding:0 !important; width:100% !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;} * { box-sizing: border-box !important; }';
             document.head.appendChild(style);
 
             // 2. 清理与强制居中铺满
             function cleanPage() {
-              // 强制重置 html 和 body 的宽度与溢出，防止页面被撑开偏移
+              // 强制重置 html 和 body 的宽度与溢出
               document.documentElement.style.setProperty('width', '100%', 'important');
               document.documentElement.style.setProperty('overflow-x', 'hidden', 'important');
               document.body.style.setProperty('margin', '0', 'important');
@@ -65,14 +65,13 @@ class _WebViewPageState extends State<WebViewPage> {
                 if (rect.left <= 5 && rect.width > 80 && rect.width < 350 && rect.height > window.innerHeight * 0.6) {
                   el.style.setProperty('display', 'none', 'important');
                 }
-                // 重置可能导致页面右移的 margin 和 padding
-                var computedStyle = window.getComputedStyle(el);
-                if (parseInt(computedStyle.marginLeft) > 0 || parseInt(computedStyle.paddingLeft) > 0) {
-                  if (el.offsetWidth > window.innerWidth * 0.5) {
-                    el.style.setProperty('margin-left', '0', 'important');
-                    el.style.setProperty('padding-left', '0', 'important');
-                    el.style.setProperty('left', '0', 'important');
-                  }
+                // 重置可能导致页面右移的 margin 和 padding，并限制宽度不超出 100%
+                if (el.offsetWidth > window.innerWidth * 0.5) {
+                  el.style.setProperty('margin-left', '0', 'important');
+                  el.style.setProperty('padding-left', '0', 'important');
+                  el.style.setProperty('left', '0', 'important');
+                  el.style.setProperty('width', '100%', 'important');
+                  el.style.setProperty('max-width', '100%', 'important');
                 }
               }
 
@@ -99,7 +98,7 @@ class _WebViewPageState extends State<WebViewPage> {
                     p.style.setProperty('margin', '0', 'important');
                     p.style.setProperty('padding', '0', 'important');
                     p.style.setProperty('left', '0', 'important');
-                    p.style.setProperty('transform', 'none', 'important');
+                    p.style.setProperty('transform', 'none', 'important'); // 清除之前的位移
                     p = p.parentElement;
                   }
                 }
@@ -107,16 +106,17 @@ class _WebViewPageState extends State<WebViewPage> {
                 v.style.setProperty('height', '100vh', 'important');
                 v.style.setProperty('object-fit', 'cover', 'important');
                 
-                // 🔥 核心修改：让画面向左移动
-                // 调整这里的像素值（例如 -20px, -50px）或者百分比（-5vw）来实现左移效果
-                v.style.setProperty('transform', 'translateX(-20px)', 'important'); 
+                // 🔥 关键修改：不使用 transform 移位移（会导致按钮被挤出屏幕）
+                // 改用 object-position，这样只移动视频画面本身，不会影响底部的操作栏
+                // 'left center' 表示画面靠左，你可以改成 '20% center' 或 '30% center' 微调
+                v.style.setProperty('object-position', 'left center', 'important'); 
               }
             }
             
             setTimeout(cleanPage, 1000);
             setTimeout(cleanPage, 2500);
 
-            // 4. 核心新增：安全延迟后，自动帮你点一次“全屏”按钮
+            // 4. 安全延迟后，自动帮你点一次“全屏”按钮
             window._hasAutoClicked = false;
             function clickFullscreen() {
               if (window._hasAutoClicked) return;
