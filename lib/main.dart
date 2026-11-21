@@ -37,21 +37,18 @@ class _WebViewPageState extends State<WebViewPage> {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      // 保持你原本的 Windows UA
+      // 保持你的 Windows UA
       ..setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
       ..setNavigationDelegate(NavigationDelegate(
         onPageFinished: (url) {
           _controller.runJavaScript("""
-            // 1. 基础样式
+            // 1. 基础样式重置
             var style = document.createElement('style');
-            style.innerHTML = 'html,body{background:#000 !important; overflow-x:hidden !important; margin:0 !important; padding:0 !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
+            style.innerHTML = 'html,body{background:#000 !important; overflow:hidden !important; margin:0 !important; padding:0 !important; width:100vw !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
             document.head.appendChild(style);
 
-            // 2. 清理与强制居中铺满
+            // 2. 清理与布局修复
             function cleanPage() {
-              document.body.style.setProperty('margin-left', '0', 'important');
-              document.body.style.setProperty('width', '100vw', 'important');
-
               // 干掉左侧边栏
               var divs = document.querySelectorAll('div');
               for (var i = 0; i < divs.length; i++) {
@@ -74,17 +71,19 @@ class _WebViewPageState extends State<WebViewPage> {
                 }
               }
 
-              // 3. 核心：强行铺满 + 画面左移
+              // 3. 核心：干掉左侧黑边，让视频铺满
               var v = document.querySelector('video');
               if (v) {
                 var p = v;
-                for (var k = 0; k < 4; k++) {
+                // 向上遍历 6 层父节点，暴力清除所有偏移量
+                for (var k = 0; k < 6; k++) {
                   if (p) {
                     p.style.setProperty('width', '100vw', 'important');
                     p.style.setProperty('max-width', '100vw', 'important');
-                    p.style.setProperty('margin', '0', 'important'); // 取消 auto 防止容器偏移
+                    p.style.setProperty('margin', '0', 'important');
                     p.style.setProperty('padding', '0', 'important');
                     p.style.setProperty('left', '0', 'important');
+                    p.style.setProperty('right', '0', 'important');
                     p.style.setProperty('transform', 'none', 'important');
                     p = p.parentElement;
                   }
@@ -93,23 +92,36 @@ class _WebViewPageState extends State<WebViewPage> {
                 v.style.setProperty('height', '100vh', 'important');
                 v.style.setProperty('object-fit', 'cover', 'important');
                 
-                // 🔥 核心修改：让画面向左移动！
-                // 'right center' 表示右侧对齐，相当于镜头向左看，画面整体左移。
-                // 如果你觉得移得不够，可以试试 '10% center' 或者 '20% center'
+                // 🔥 强行让画面向右对齐，以抵消左侧的留白（视觉上画面整体左移）
                 v.style.setProperty('object-position', 'right center', 'important'); 
               }
 
-              // 4. 保护底部全屏按钮不被挤出屏幕
-              var bottomBarDivs = document.querySelectorAll('div');
-              for (var m = 0; m < bottomBarDivs.length; m++) {
-                var div = bottomBarDivs[m];
-                if (div.innerText && (div.innerText.includes('倍速') || div.innerText.match(/\d{2}:\d{2}/))) {
-                  if (div.offsetHeight < 150) {
-                    div.style.setProperty('width', '100vw', 'important');
-                    div.style.setProperty('box-sizing', 'border-box', 'important');
-                    // 强行给右侧留出 20px 的救命内边距
-                    div.style.setProperty('padding-right', '20px', 'important'); 
-                  }
+              // 4. 找回右下角全屏按钮
+              // 找到底部控制栏，强制往左拉回屏幕内
+              var allDivs = document.querySelectorAll('div');
+              for (var m = 0; m < allDivs.length; m++) {
+                var div = allDivs[m];
+                var txt = div.innerText || '';
+                // 识别底部控制栏（包含倍速或时间）
+                if ((txt.includes('倍速') || txt.match(/\d{2}:\d{2}/)) && div.offsetHeight < 150) {
+                  div.style.setProperty('width', '100vw', 'important');
+                  div.style.setProperty('box-sizing', 'border-box', 'important');
+                  // 去掉你之前说不要的安全距离，直接把右边距设死
+                  div.style.setProperty('padding-right', '0', 'important');
+                  // 🔥 核心：把整个控制栏往左强行拉扯，把全屏按钮拉出来
+                  div.style.setProperty('right', '10px', 'important'); 
+                }
+              }
+
+              // 🔥 暴力抢救全屏按钮（即使被隐藏了也给它弄出来）
+              var els = document.querySelectorAll('div, button, span, svg, path');
+              for (var n = 0; n < els.length; n++) {
+                var el = els[n];
+                var title = el.getAttribute('title') || el.getAttribute('aria-label') || '';
+                if (title.indexOf('全屏') > -1 || title.indexOf('fullscreen') > -1) {
+                  el.style.setProperty('display', 'block', 'important');
+                  el.style.setProperty('visibility', 'visible', 'important');
+                  el.style.setProperty('opacity', '1', 'important');
                 }
               }
             }
@@ -117,7 +129,7 @@ class _WebViewPageState extends State<WebViewPage> {
             setTimeout(cleanPage, 1000);
             setTimeout(cleanPage, 2500);
 
-            // 5. 核心新增：安全延迟后，自动帮你点一次“全屏”按钮
+            // 5. 自动点击全屏
             window._hasAutoClicked = false;
             function clickFullscreen() {
               if (window._hasAutoClicked) return;
