@@ -43,80 +43,57 @@ class _WebViewPageState extends State<WebViewPage> {
           _controller.runJavaScript("""
             // 1. 基础样式
             var style = document.createElement('style');
-            style.innerHTML = 'html,body{background:#000 !important; overflow-x:hidden !important; margin:0 !important; padding:0 !important; width:100% !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;} * { box-sizing: border-box !important; }';
+            style.innerHTML = 'html,body{background:#000 !important; overflow:hidden !important; margin:0 !important; padding:0 !important; width:100vw !important; height:100vh !important;} header,.header,[class*="header"],[class*="nav"]{display:none !important;} aside,.sidebar{display:none !important;}';
             document.head.appendChild(style);
 
-            // 2. 清理与强制居中铺满
-            function cleanPage() {
-              // 强制重置 html 和 body 的宽度与溢出
-              document.documentElement.style.setProperty('width', '100%', 'important');
-              document.documentElement.style.setProperty('overflow-x', 'hidden', 'important');
-              document.body.style.setProperty('margin', '0', 'important');
-              document.body.style.setProperty('padding', '0', 'important');
-              document.body.style.setProperty('width', '100%', 'important');
-              document.body.style.setProperty('overflow-x', 'hidden', 'important');
-
-              // 干掉左侧边栏 并 重置导致右移的边距
-              var divs = document.querySelectorAll('div');
-              for (var i = 0; i < divs.length; i++) {
-                var el = divs[i];
-                var rect = el.getBoundingClientRect();
-                // 隐藏左侧边栏
-                if (rect.left <= 5 && rect.width > 80 && rect.width < 350 && rect.height > window.innerHeight * 0.6) {
-                  el.style.setProperty('display', 'none', 'important');
-                }
-                // 重置可能导致页面右移的 margin 和 padding，并限制宽度不超出 100%
-                if (el.offsetWidth > window.innerWidth * 0.5) {
-                  el.style.setProperty('margin-left', '0', 'important');
-                  el.style.setProperty('padding-left', '0', 'important');
-                  el.style.setProperty('left', '0', 'important');
-                  el.style.setProperty('width', '100%', 'important');
-                  el.style.setProperty('max-width', '100%', 'important');
-                }
-              }
-
-              // 干掉提示框
-              var allElements = document.querySelectorAll('*');
-              for (var j = 0; j < allElements.length; j++) {
-                var e = allElements[j];
-                if (e.childNodes.length > 0 && e.childNodes[0].nodeType === 3) {
-                  var txt = e.childNodes[0].nodeValue;
-                  if (txt && (txt.indexOf('空格') > -1 || txt.indexOf('暂停') > -1 || txt.indexOf('播放') > -1)) {
-                    e.style.setProperty('display', 'none', 'important');
-                  }
-                }
-              }
-
-              // 3. 核心：强行居中铺满并【向左偏移】
+            // 2. 核心清理与布局修复
+            function fixLayout() {
               var v = document.querySelector('video');
-              if (v) {
-                var p = v;
-                for (var k = 0; k < 4; k++) {
-                  if (p) {
-                    p.style.setProperty('width', '100%', 'important');
-                    p.style.setProperty('max-width', '100%', 'important');
-                    p.style.setProperty('margin', '0', 'important');
-                    p.style.setProperty('padding', '0', 'important');
-                    p.style.setProperty('left', '0', 'important');
-                    p.style.setProperty('transform', 'none', 'important'); // 清除之前的位移
-                    p = p.parentElement;
-                  }
+              if (!v) return;
+
+              // 强制清除 video 外层容器的偏移
+              var parent = v.parentElement;
+              var depth = 0;
+              while (parent && depth < 4) {
+                parent.style.setProperty('margin', '0', 'important');
+                parent.style.setProperty('padding', '0', 'important');
+                parent.style.setProperty('width', '100vw', 'important');
+                parent.style.setProperty('max-width', '100vw', 'important');
+                parent.style.setProperty('left', '0', 'important');
+                parent.style.setProperty('transform', 'none', 'important'); // 清除之前的位移
+                parent = parent.parentElement;
+                depth++;
+              }
+
+              // 3. 强制视频铺满屏幕，并设置画面向左偏移
+              v.style.setProperty('width', '100vw', 'important');
+              v.style.setProperty('height', '100vh', 'important');
+              v.style.setProperty('object-fit', 'cover', 'important');
+              // 🔥 关键点1：使用 object-position 让画面向左靠，不影响其他按钮
+              // 如果觉得靠左不够，可以把 'left center' 改成 '30% center' 甚至 '0% center'
+              v.style.setProperty('object-position', 'left center', 'important'); 
+              
+              // 4. 修复底部控制栏，把“全屏”按钮拉回来
+              var allDivs = document.querySelectorAll('div');
+              for (var i = 0; i < allDivs.length; i++) {
+                var div = allDivs[i];
+                // 寻找包含“倍速”或“全屏”字样的底部控制栏
+                if (div.innerText && (div.innerText.includes('倍速') || div.innerText.includes('全屏'))) {
+                  div.style.setProperty('width', '100vw', 'important');
+                  div.style.setProperty('max-width', '100vw', 'important');
+                  div.style.setProperty('left', '0', 'important');
+                  div.style.setProperty('right', '0', 'important');
+                  div.style.setProperty('box-sizing', 'border-box', 'important');
+                  // 🔥 关键点2：强制给右侧留出 15px 的内边距，防止全屏按钮被屏幕边缘切掉
+                  div.style.setProperty('padding-right', '15px', 'important');
                 }
-                v.style.setProperty('width', '100%', 'important');
-                v.style.setProperty('height', '100vh', 'important');
-                v.style.setProperty('object-fit', 'cover', 'important');
-                
-                // 🔥 关键修改：不使用 transform 移位移（会导致按钮被挤出屏幕）
-                // 改用 object-position，这样只移动视频画面本身，不会影响底部的操作栏
-                // 'left center' 表示画面靠左，你可以改成 '20% center' 或 '30% center' 微调
-                v.style.setProperty('object-position', 'left center', 'important'); 
               }
             }
             
-            setTimeout(cleanPage, 1000);
-            setTimeout(cleanPage, 2500);
+            setTimeout(fixLayout, 1000);
+            setTimeout(fixLayout, 2500);
 
-            // 4. 安全延迟后，自动帮你点一次“全屏”按钮
+            // 5. 安全延迟后，自动帮你点一次“全屏”按钮 (如果不想要自动全屏，可以删掉这段)
             window._hasAutoClicked = false;
             function clickFullscreen() {
               if (window._hasAutoClicked) return;
@@ -133,7 +110,7 @@ class _WebViewPageState extends State<WebViewPage> {
             }
             setTimeout(clickFullscreen, 2500);
 
-            // 5. 滑动引擎
+            // 6. 滑动引擎
             var startY = 0;
             document.addEventListener('touchstart', function(e) {
                 startY = e.touches[0].clientY;
